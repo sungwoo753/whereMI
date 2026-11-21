@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 적응형 아이콘: 4호선 하늘색 배경 + 흰 그림(진행 링, 열차 점, 지하철 앞모습). 런처가 모양(스쿼클 등)을 입힌다. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/line4" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
+</adaptive-icon>
