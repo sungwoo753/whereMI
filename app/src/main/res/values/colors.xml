@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="line4">#00A5DE</color>
+    <!-- iOS 시스템 색 (라이트) -->
+    <color name="bg">#F2F2F7</color>
+    <color name="card">#FFFFFF</color>
+    <color name="label">#000000</color>
+    <color name="label2">#8E8E93</color>
+    <color name="separator">#1F3C3C43</color>
+    <color name="fill">#E5E5EA</color>
+</resources>
