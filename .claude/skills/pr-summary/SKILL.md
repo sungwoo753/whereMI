@@ -73,6 +73,10 @@ bash .claude/skills/pr-summary/scripts/collect.sh [base]
    # 새 PR
    <gh> pr create --base <base> --head <head> --title "<제목>" --body-file <임시파일>
    ```
+   `gh pr edit` 가 `Projects (classic) is being deprecated` 오류로 실패하면 (gh 2.62 이하에서 발생) REST API 로 같은 내용을 반영한다:
+   ```bash
+   <gh> api -X PATCH repos/<owner>/<repo>/pulls/<number> -f title="<제목>" -F body=@<임시파일>
+   ```
    브랜치가 아직 원격에 없으면 `git push -u origin <head>` 가 먼저 필요하다. push 도 원격에 올리는 일이므로 사용자 확인에 포함해서 묻는다.
 3. 반영 후 PR URL 을 알려 준다.
 
