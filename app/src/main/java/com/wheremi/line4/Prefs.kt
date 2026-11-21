@@ -20,13 +20,10 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("overlay", true)
         set(v) = sp.edit().putBoolean("overlay", v).apply()
 
-    var overlayX: Int
-        get() = sp.getInt("ox4", -1)
-        set(v) = sp.edit().putInt("ox4", v).apply()
-
-    var overlayY: Int
-        get() = sp.getInt("oy4", -1)
-        set(v) = sp.edit().putInt("oy4", v).apply()
+    /** 위젯 높이: 상태바 아래로부터의 거리(px). 위치는 항상 오른쪽 위라 x 는 저장하지 않는다 */
+    var overlayYOffset: Int
+        get() = sp.getInt("oyOff", 0)
+        set(v) = sp.edit().putInt("oyOff", v).apply()
 
     /** 오늘(KST) API 호출 수를 1 올리고 반환. 하루 1,000회 한도 확인용. */
     fun countApiCall(): Int {

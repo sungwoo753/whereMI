@@ -19,7 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * 시계(상태바) 바로 아래 좌측에 떠 있는 작은 알약.
+ * 시계(상태바) 바로 아래, 화면 오른쪽 위에 자석처럼 붙어 있는 작은 알약.
  *
  *   ( 선바위 | 3역 전 )            ← 2역 이상 남음 (배경은 스쿼클 모양)
  *   ( 선바위 | ━━━━━━──── )      ← 도착지가 다음 역 (흐르는 진행 바)
@@ -27,7 +27,9 @@ import android.widget.TextView
  * 대기 중 탈 열차가 곧 도착하면 배경만 부드럽게 점멸하고, 그때 위젯을 탭하면 "탑승"으로 인식한다.
  *
  * 배경을 호선 색(4호선 하늘색)으로 채우고, 글자는 흰색 기본 글씨로만 표시한다.
- * 상태바·렌즈홀 영역 위로는 올라가지 않으며, 좌우/아래로 드래그해 옮길 수 있다.
+ * 오른쪽 여백은 항상 12dp 로 고정이라, 글자가 길어지면 왼쪽으로만 늘어나 화면 밖으로 나가지 않는다.
+ * 회전·폴드 펼침으로 화면 크기가 바뀌어도 다시 오른쪽 위에 붙는다.
+ * 위아래로 드래그해 높이를 바꿀 수 있고, 좌우로 끌어도 놓으면 오른쪽으로 돌아간다.
  * "다른 앱 위에 표시" 권한이 있으면 유튜브 전체화면 위에도 보인다.
  */
 class OverlayController(
@@ -71,16 +73,16 @@ class OverlayController(
     /** 시계(상태바) 바로 밑. 상태바·렌즈홀과 겹치지 않을 만큼만 띄운다. */
     private fun minY() = topSafeInset() + dp(2f)
 
-    private fun screenWidth(): Int =
-        if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.width()
-        else context.resources.displayMetrics.widthPixels
+    private fun screenHeight(): Int =
+        if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.height()
+        else context.resources.displayMetrics.heightPixels
 
-    /** 위젯 오른쪽 끝이 화면 밖으로 나가지 않도록 x 를 당긴다 (좌우 8dp 여백) */
-    private fun clampX(x: Int, width: Int): Int {
-        val margin = dp(8f)
-        val maxX = screenWidth() - width - margin
-        return x.coerceAtMost(maxX).coerceAtLeast(minOf(margin, maxX.coerceAtLeast(0)))
-    }
+    /** 화면 오른쪽 가장자리와의 고정 여백. 위젯은 오른쪽 기준으로 배치되어 폭이 바뀌면 왼쪽으로만 늘어난다. */
+    private fun rightMargin() = dp(12f)
+
+    /** 상태바 아래로부터의 거리(저장값) → 실제 y. 화면 크기가 바뀌어도 같은 높이감을 유지 */
+    private fun yFor(offset: Int, height: Int): Int =
+        (minY() + offset).coerceAtMost(screenHeight() - height - dp(16f)).coerceAtLeast(minY())
 
     fun show() {
         if (root != null || !canShow()) return
@@ -137,7 +139,8 @@ class OverlayController(
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        gravity = Gravity.TOP or Gravity.START
+        // 오른쪽 위 기준: x 는 "화면 오른쪽 끝에서의 거리"
+        gravity = Gravity.TOP or Gravity.END
         if (Build.VERSION.SDK_INT >= 30) {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         } else if (Build.VERSION.SDK_INT >= 28) {
@@ -164,8 +167,8 @@ class OverlayController(
             addView(bar)
         }
         params = baseParams().apply {
-            x = prefs.overlayX.takeIf { it >= 0 } ?: dp(14f)
-            y = maxOf(prefs.overlayY, minY())
+            x = rightMargin()
+            y = yFor(prefs.overlayYOffset, 0)
         }
 
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0
@@ -176,8 +179,10 @@ class OverlayController(
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = clampX((startX + (e.rawX - downX)).toInt(), view.width)
-                    params.y = (startY + (e.rawY - downY)).toInt().coerceAtLeast(minY())
+                    // END 기준이라 손가락이 왼쪽으로 가면 x(오른쪽 여백)가 커진다
+                    params.x = (startX - (e.rawX - downX)).toInt().coerceAtLeast(0)
+                    params.y = (startY + (e.rawY - downY)).toInt()
+                        .coerceIn(minY(), (screenHeight() - view.height - dp(16f)).coerceAtLeast(minY()))
                     root?.let { wm.updateViewLayout(it, params) }
                     true
                 }
@@ -189,26 +194,45 @@ class OverlayController(
                         view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                         onBoardTapped()
                     } else {
-                        prefs.overlayX = params.x; prefs.overlayY = params.y
+                        snapToRight()
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    prefs.overlayX = params.x; prefs.overlayY = params.y
+                    snapToRight()
                     true
                 }
                 else -> false
             }
         }
-        // 글자 길이가 바뀌어 위젯 폭이 달라지면 화면 안으로 다시 맞춘다
-        view.addOnLayoutChangeListener { v, l, _, r, _, _, _, _, _ ->
-            val fixed = clampX(params.x, r - l)
-            if (fixed != params.x && root != null) {
-                params.x = fixed
-                v.post { root?.let { runCatching { wm.updateViewLayout(it, params) } } }
+        // 처음 크기가 정해진 뒤 화면 아래로 넘치지 않게 y 를 한 번 더 맞춘다
+        view.addOnLayoutChangeListener { v, _, t, _, b, _, ot, _, ob ->
+            if (b - t != ob - ot && root != null) {
+                val fixed = yFor(prefs.overlayYOffset, b - t)
+                if (fixed != params.y) {
+                    params.y = fixed
+                    v.post { root?.let { runCatching { wm.updateViewLayout(it, params) } } }
+                }
             }
         }
         return view
+    }
+
+    /** 손을 떼면 자석처럼 오른쪽 가장자리(고정 여백)로 돌아가고, 높이는 상태바 기준 거리로 저장 */
+    private fun snapToRight() {
+        prefs.overlayYOffset = (params.y - minY()).coerceAtLeast(0)
+        val from = params.x
+        val to = rightMargin()
+        if (from == to) return
+        android.animation.ValueAnimator.ofInt(from, to).apply {
+            duration = 220
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                params.x = it.animatedValue as Int
+                root?.let { r -> runCatching { wm.updateViewLayout(r, params) } }
+            }
+            start()
+        }
     }
 
     // ---------------------------------------------------------------- 갱신
